@@ -5,39 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Mobile 3D Game</title>
 <style>
-html, body {
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  background: #000;
-  touch-action: none;
-}
-#ui {
-  position: fixed;
-  top: 10px;
-  left: 10px;
-  color: #0f0;
-  font-family: monospace;
-  z-index: 10;
-}
-#stick {
-  position: fixed;
-  bottom: 20px;
-  left: 20px;
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.15);
-}
-#knob {
-  position: absolute;
-  left: 40px;
-  top: 40px;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: rgba(0,255,0,0.9);
-}
+html, body { margin:0; overflow:hidden; background:#000; touch-action:none; }
+#ui { position:fixed; top:10px; left:10px; color:#0f0; font-family:monospace; z-index:10; }
+#stick { position:fixed; bottom:20px; left:20px; width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,.15); }
+#knob { position:absolute; left:40px; top:40px; width:40px; height:40px; border-radius:50%; background:rgba(0,255,0,.9); }
 </style>
 </head>
 <body>
@@ -47,144 +18,127 @@ html, body {
 
 <script type="module">
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.js";
+import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/loaders/GLTFLoader.js";
 
-// ===== 基本 =====
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
 
-const camera = new THREE.PerspectiveCamera(
-  70, innerWidth/innerHeight, 0.1, 100
-);
+const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 100);
 camera.position.set(0, 1.5, 3);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antialias:true });
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(devicePixelRatio);
 document.body.appendChild(renderer.domElement);
 
-// ===== ライト =====
+// ライト
 scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2));
-const dir = new THREE.DirectionalLight(0xffffff, 1);
-dir.position.set(5, 10, 5);
-scene.add(dir);
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(5, 10, 5);
+scene.add(light);
 
-// ===== 地面 =====
+// 地面
 const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(50, 50),
-  new THREE.MeshStandardMaterial({ color: 0x222222 })
+  new THREE.PlaneGeometry(50,50),
+  new THREE.MeshStandardMaterial({ color:0x222222 })
 );
-ground.rotation.x = -Math.PI / 2;
+ground.rotation.x = -Math.PI/2;
 scene.add(ground);
 
 // ===== プレイヤー =====
 const player = new THREE.Group();
-const body = new THREE.Mesh(
-  new THREE.BoxGeometry(0.5, 1, 0.5),
-  new THREE.MeshStandardMaterial({ color: 0x00ff00 })
-);
-body.position.y = 0.5;
-player.add(body);
 scene.add(player);
 
-// ===== カメラ追従 =====
-const camOffset = new THREE.Vector3(0, 1.5, 3);
+let playerModel = null;
 
-// ===== アイテム =====
+// glb読み込み
+new GLTFLoader().load(
+  "./player.glb",
+  gltf => {
+    playerModel = gltf.scene;
+    playerModel.scale.set(1,1,1); // ← モデルに合わせて調整
+    playerModel.position.y = 0;
+    player.add(playerModel);
+  },
+  undefined,
+  err => alert("player.glb 読み込み失敗")
+);
+
+// アイテム
 const items = [];
-const itemGeo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
-const itemMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-
-for (let i = 0; i < 20; i++) {
-  const m = new THREE.Mesh(itemGeo, itemMat);
-  m.position.set(
-    (Math.random() - 0.5) * 20,
-    0.2,
-    (Math.random() - 0.5) * 20
-  );
+const geo = new THREE.BoxGeometry(0.4,0.4,0.4);
+const mat = new THREE.MeshStandardMaterial({ color:0xff0000 });
+for(let i=0;i<20;i++){
+  const m = new THREE.Mesh(geo,mat);
+  m.position.set((Math.random()-0.5)*20,0.2,(Math.random()-0.5)*20);
   scene.add(m);
   items.push(m);
 }
 
-// ===== UI =====
+// UI
 let score = 0;
 const scoreEl = document.getElementById("score");
 
-// ===== 仮想スティック =====
-let moveX = 0, moveZ = 0;
-const stick = document.getElementById("stick");
-const knob = document.getElementById("knob");
+// 仮想スティック
+let moveX=0, moveZ=0;
+const stick=document.getElementById("stick");
+const knob=document.getElementById("knob");
 
-stick.addEventListener("touchmove", e => {
-  const r = stick.getBoundingClientRect();
-  const t = e.touches[0];
-  let x = t.clientX - r.left - 60;
-  let y = t.clientY - r.top - 60;
-  const d = Math.hypot(x, y);
-  if (d > 40) {
-    x *= 40 / d;
-    y *= 40 / d;
-  }
-  knob.style.left = 40 + x + "px";
-  knob.style.top = 40 + y + "px";
-  moveX = x / 40;
-  moveZ = y / 40;
+stick.addEventListener("touchmove",e=>{
+  const r=stick.getBoundingClientRect();
+  const t=e.touches[0];
+  let x=t.clientX-r.left-60;
+  let y=t.clientY-r.top-60;
+  const d=Math.hypot(x,y);
+  if(d>40){ x*=40/d; y*=40/d; }
+  knob.style.left=40+x+"px";
+  knob.style.top=40+y+"px";
+  moveX=x/40; moveZ=y/40;
+});
+stick.addEventListener("touchend",()=>{
+  knob.style.left="40px"; knob.style.top="40px";
+  moveX=moveZ=0;
 });
 
-stick.addEventListener("touchend", () => {
-  knob.style.left = "40px";
-  knob.style.top = "40px";
-  moveX = moveZ = 0;
+// 視点操作
+let lastX=null;
+addEventListener("touchmove",e=>{
+  if(e.target===stick) return;
+  if(lastX!==null) player.rotation.y-=(e.touches[0].clientX-lastX)*0.005;
+  lastX=e.touches[0].clientX;
 });
+addEventListener("touchend",()=>lastX=null);
 
-// ===== 視点操作 =====
-let lastX = null;
-addEventListener("touchmove", e => {
-  if (e.target === stick) return;
-  if (lastX !== null) {
-    player.rotation.y -= (e.touches[0].clientX - lastX) * 0.005;
-  }
-  lastX = e.touches[0].clientX;
-});
-addEventListener("touchend", () => lastX = null);
-
-// ===== ループ =====
-function animate() {
+// ループ
+function animate(){
   requestAnimationFrame(animate);
+  const speed=0.08;
 
-  const speed = 0.08;
-  player.position.x +=
-    (Math.sin(player.rotation.y) * -moveZ +
-     Math.cos(player.rotation.y) * moveX) * speed;
-  player.position.z +=
-    (Math.cos(player.rotation.y) * -moveZ -
-     Math.sin(player.rotation.y) * moveX) * speed;
+  player.position.x+=(Math.sin(player.rotation.y)*-moveZ+Math.cos(player.rotation.y)*moveX)*speed;
+  player.position.z+=(Math.cos(player.rotation.y)*-moveZ-Math.sin(player.rotation.y)*moveX)*speed;
 
-  // カメラ追従
   camera.position.copy(player.position)
-    .add(camOffset.clone().applyAxisAngle(
-      new THREE.Vector3(0,1,0),
-      player.rotation.y
+    .add(new THREE.Vector3(0,1.5,3).applyAxisAngle(
+      new THREE.Vector3(0,1,0), player.rotation.y
     ));
   camera.lookAt(player.position);
 
-  // アイテム取得
-  for (let i = items.length - 1; i >= 0; i--) {
-    if (items[i].position.distanceTo(player.position) < 0.7) {
+  for(let i=items.length-1;i>=0;i--){
+    if(items[i].position.distanceTo(player.position)<0.7){
       scene.remove(items[i]);
-      items.splice(i, 1);
-      score++;
-      scoreEl.textContent = score;
+      items.splice(i,1);
+      score++; scoreEl.textContent=score;
     }
   }
 
-  renderer.render(scene, camera);
+  renderer.render(scene,camera);
 }
 animate();
 
-addEventListener("resize", () => {
-  camera.aspect = innerWidth/innerHeight;
+addEventListener("resize",()=>{
+  camera.aspect=innerWidth/innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
+  renderer.setSize(innerWidth,innerHeight);
 });
 </script>
 </body>
